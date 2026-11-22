@@ -1,0 +1,12 @@
+// Base configuration committed to git (no personal IDs or private Tailscale hosts).
+// Copy Local.xcconfig.example -> Local.xcconfig (gitignored) to set your Apple Team ID,
+// bundle ID prefix, and Tailscale server URL.
+
+DEVELOPMENT_TEAM =
+BUNDLE_ID_PREFIX = com.example
+APP_BUNDLE_ID = $(BUNDLE_ID_PREFIX).LocalWhisper
+KEYBOARD_BUNDLE_ID = $(BUNDLE_ID_PREFIX).LocalWhisper.Keyboard
+APP_GROUP_ID = group.$(BUNDLE_ID_PREFIX).LocalWhisper
+DEFAULT_SERVER_URL = https:/$()/your-mac.ts.net/parakeet
+
+#include? "Local.xcconfig"

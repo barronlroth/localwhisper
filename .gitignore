@@ -1,0 +1,17 @@
+# Python
+server/.venv/
+server/__pycache__/
+server/tests/__pycache__/
+server/.pytest_cache/
+*.pyc
+.DS_Store
+
+# Xcode & local signing overrides (never commit personal Team IDs or Tailscale URLs)
+ios/Config/Local.xcconfig
+ios/*.xcodeproj/
+ios/DerivedData/
+ios/build/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+.swiftpm/

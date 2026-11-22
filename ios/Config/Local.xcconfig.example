@@ -1,0 +1,6 @@
+// Copy this file to Local.xcconfig (gitignored) and fill in your personal values.
+// Note: in xcconfig files, write "https://" as "https:/$()/" so "//" is not treated as a comment.
+
+DEVELOPMENT_TEAM = YOUR_APPLE_TEAM_ID
+BUNDLE_ID_PREFIX = com.yourname
+DEFAULT_SERVER_URL = https:/$()/your-mac.tailXXXXX.ts.net/parakeet
