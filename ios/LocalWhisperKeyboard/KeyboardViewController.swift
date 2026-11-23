@@ -30,7 +30,7 @@ final class KeyboardViewController: UIInputViewController {
         host.didMove(toParent: self)
         self.hostingController = host
 
-        let hc = view.heightAnchor.constraint(equalToConstant: 264)
+        let hc = view.heightAnchor.constraint(equalToConstant: 278)
         hc.priority = UILayoutPriority(999)
         hc.isActive = true
         self.heightConstraint = hc
@@ -88,21 +88,37 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    /// Opens a URL scheme in the containing app safely under APPLICATION_EXTENSION_API_ONLY.
+    /// Opens a custom URL scheme in the containing app safely on iOS 18+ under APPLICATION_EXTENSION_API_ONLY.
     private func openURLFromExtension(_ url: URL) {
+        // 1. Official NSExtensionContext opener (works cleanly for parent app custom schemes on iOS 18+)
+        if let context = extensionContext {
+            context.open(url) { [weak self] success in
+                if !success {
+                    Task { @MainActor in
+                        self?.openURLViaResponderChain(url)
+                    }
+                }
+            }
+            return
+        }
+        openURLViaResponderChain(url)
+    }
+
+    private func openURLViaResponderChain(_ url: URL) {
         let modernSelector = NSSelectorFromString("openURL:options:completionHandler:")
-        let legacySelector = NSSelectorFromString("openURL:")
         var responder: UIResponder? = self
         while let current = responder {
             if current.responds(to: modernSelector),
                let imp = class_getMethodImplementation(type(of: current), modernSelector) {
-                typealias OpenURLFn = @convention(c) (AnyObject, Selector, NSURL, NSDictionary, AnyObject?) -> Void
+                typealias OpenURLFn = @convention(c) (
+                    AnyObject,
+                    Selector,
+                    NSURL,
+                    NSDictionary,
+                    (@convention(block) (Bool) -> Void)?
+                ) -> Void
                 let fn = unsafeBitCast(imp, to: OpenURLFn.self)
                 fn(current, modernSelector, url as NSURL, [:], nil)
-                return
-            }
-            if current.responds(to: legacySelector) {
-                _ = current.perform(legacySelector, with: url)
                 return
             }
             responder = current.next

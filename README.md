@@ -1,5 +1,7 @@
 # LocalWhisper
 
+![LocalWhisper](assets/localwhisper-imessage.png)
+
 A private, self-hosted, Wispr Flow–style iOS dictation keyboard backed by **NVIDIA Parakeet (`mlx-community/parakeet-tdt-0.6b-v3`)** running on your own Apple Silicon Mac over **Tailscale HTTPS** — with **zero app-switching** inside the keyboard.
 
 ## Highlights

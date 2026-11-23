@@ -28,16 +28,29 @@ final class KeyboardViewModel {
         case unreachable
     }
 
+    enum KeyboardPage: Equatable {
+        case numbers
+        case symbols
+        case letters
+    }
+
+    enum ShiftState: Equatable {
+        case off
+        case shifted
+        case capsLock
+    }
+
     var phase: Phase = .idle
+    var page: KeyboardPage = .numbers
+    var shiftState: ShiftState = .shifted
     var hasFullAccess: Bool = false
     var serverStatus: ServerStatus = .unknown
-    var waveformLevels: [CGFloat] = Array(repeating: 0.08, count: 24)
+    var waveformLevels: [CGFloat] = Array(repeating: 0.12, count: 18)
     var elapsedSeconds: Int = 0
     var canUndo: Bool = false
     var lastLatencyMs: Int?
     var mode: TranscriptionMode = SharedStore.shared.mode
-    var showNeedsInputSwitchKey: Bool = true
-    var isHoldingToTalk: Bool = false
+    var showNeedsInputSwitchKey: Bool = false
 
     private let recorder = WebViewAudioRecorder()
     private var streamSession: ParakeetStreamSession?
@@ -47,8 +60,9 @@ final class KeyboardViewModel {
     private var lastHealthCheckAt: Date?
     private var recordingStartedAt: Date?
     private var lastInsertedCharCount: Int = 0
-    private var rawLevelHistory: [CGFloat] = Array(repeating: 0.06, count: 24)
+    private var rawLevelHistory: [CGFloat] = Array(repeating: 0.10, count: 18)
     private var activeRecordingToken = UUID()
+    private var lastShiftTapAt: Date?
 
     // Callbacks provided by KeyboardViewController
     var onInsertText: ((String) -> Void)?
@@ -59,6 +73,10 @@ final class KeyboardViewModel {
 
     init() {
         configureRecorderCallbacks()
+    }
+
+    var isActivelyRecording: Bool {
+        phase == .starting || phase == .recording
     }
 
     func attachRecorder(to hostView: UIView) {
@@ -72,6 +90,7 @@ final class KeyboardViewModel {
         self.showNeedsInputSwitchKey = needsInputModeSwitchKey
         SharedStore.shared.reload()
         self.mode = SharedStore.shared.mode
+        updateAutoShift()
 
         if hasFullAccess && SharedStore.shared.prewarmWebView {
             recorder.prewarm()
@@ -79,7 +98,7 @@ final class KeyboardViewModel {
 
         // Check if user returned from companion-app fallback dictation
         if let handoffText = SharedStore.shared.consumePendingHandoffText() {
-            insertTranscriptText(handoffText, latencyMs: 0, recordToHistory: false)
+            insertTranscriptText(handoffText, latencyMs: 0)
         }
 
         if hasFullAccess {
@@ -103,11 +122,22 @@ final class KeyboardViewModel {
         SharedStore.shared.mode = mode
     }
 
-    func startDictation(isHoldGesture: Bool = false) {
+    func toggleDictation() {
+        switch phase {
+        case .starting, .recording:
+            stopAndTranscribe()
+        case .transcribing:
+            break
+        case .idle, .inserted, .error:
+            startDictation()
+        }
+    }
+
+    func startDictation() {
         guard hasFullAccess else {
             HapticFeedback.error()
             phase = .error(
-                message: "Turn on Allow Full Access in Settings -> Keyboards -> LocalWhisper.",
+                message: "Enable Allow Full Access in Settings → Keyboards → LocalWhisper.",
                 recovery: .openAppSettings
             )
             return
@@ -121,10 +151,9 @@ final class KeyboardViewModel {
 
         let token = UUID()
         activeRecordingToken = token
-        isHoldingToTalk = isHoldGesture
         elapsedSeconds = 0
         recordingStartedAt = Date()
-        rawLevelHistory = Array(repeating: 0.08, count: 24)
+        rawLevelHistory = Array(repeating: 0.12, count: 18)
         waveformLevels = rawLevelHistory
         phase = .starting
         HapticFeedback.startListening()
@@ -158,11 +187,10 @@ final class KeyboardViewModel {
         let (pcmData, duration) = recorder.stopRecording()
         let activeSession = streamSession
         streamSession = nil
-        isHoldingToTalk = false
 
         guard pcmData.count >= 640 else {
             Task { await activeSession?.cancel() }
-            phase = .error(message: "Too short — hold or speak a little longer.", recovery: .retry)
+            phase = .error(message: "Too short — try speaking a little longer.", recovery: .retry)
             scheduleIdleReset(after: 2.2)
             return
         }
@@ -220,7 +248,7 @@ final class KeyboardViewModel {
                     source: "Keyboard"
                 )
                 SharedStore.shared.appendHistory(record)
-                self.insertTranscriptText(finalInsertion, latencyMs: latency, recordToHistory: false)
+                self.insertTranscriptText(finalInsertion, latencyMs: latency)
             } catch let err as ParakeetError {
                 guard self.activeRecordingToken == currentToken else { return }
                 HapticFeedback.error()
@@ -245,7 +273,6 @@ final class KeyboardViewModel {
         recorder.cancelRecording()
         let activeSession = streamSession
         streamSession = nil
-        isHoldingToTalk = false
         if let activeSession {
             Task { await activeSession.cancel() }
         }
@@ -266,17 +293,74 @@ final class KeyboardViewModel {
         }
     }
 
-    func insertQuickText(_ text: String) {
+    // MARK: - Key Input
+
+    func insertCharacter(_ char: String) {
         HapticFeedback.keyTap()
-        onInsertText?(text)
+        let output: String
+        if page == .letters {
+            output = (shiftState == .off) ? char.lowercased() : char.uppercased()
+            if shiftState == .shifted {
+                shiftState = .off
+            }
+        } else {
+            output = char
+        }
+        onInsertText?(output)
         canUndo = false
         lastInsertedCharCount = 0
+        if char == "\n" {
+            updateAutoShift()
+        }
+    }
+
+    func insertSpace() {
+        HapticFeedback.keyTap()
+        onInsertText?(" ")
+        canUndo = false
+        lastInsertedCharCount = 0
+        updateAutoShift()
+    }
+
+    func insertReturn() {
+        HapticFeedback.keyTap()
+        onInsertText?("\n")
+        canUndo = false
+        lastInsertedCharCount = 0
+        if shiftState != .capsLock {
+            shiftState = .shifted
+        }
     }
 
     func deleteOneBackward() {
         onDeleteBackward?(1)
         canUndo = false
         lastInsertedCharCount = 0
+    }
+
+    func toggleShift() {
+        HapticFeedback.keyTap()
+        let now = Date()
+        if let last = lastShiftTapAt, now.timeIntervalSince(last) < 0.32, shiftState == .shifted {
+            shiftState = .capsLock
+            lastShiftTapAt = nil
+            return
+        }
+        lastShiftTapAt = now
+        switch shiftState {
+        case .off:
+            shiftState = .shifted
+        case .shifted, .capsLock:
+            shiftState = .off
+        }
+    }
+
+    func switchPage(_ target: KeyboardPage) {
+        HapticFeedback.keyTap()
+        page = target
+        if target == .letters {
+            updateAutoShift()
+        }
     }
 
     func performRecovery(_ action: RecoveryAction) {
@@ -308,15 +392,19 @@ final class KeyboardViewModel {
         }
     }
 
-    func openSystemSettings() {
-        if let url = URL(string: "\(AppGroup.urlScheme)://setup-keyboard") {
-            onOpenURL?(url)
+    // MARK: - Private
+
+    private func updateAutoShift() {
+        guard shiftState != .capsLock else { return }
+        let ctx = onContextBeforeCursor?() ?? ""
+        if ctx.isEmpty || ctx.hasSuffix("\n") || ctx.hasSuffix(". ") || ctx.hasSuffix("! ") || ctx.hasSuffix("? ") {
+            shiftState = .shifted
+        } else {
+            shiftState = .off
         }
     }
 
-    // MARK: - Private
-
-    private func insertTranscriptText(_ text: String, latencyMs: Int, recordToHistory: Bool) {
+    private func insertTranscriptText(_ text: String, latencyMs: Int) {
         onInsertText?(text)
         lastInsertedCharCount = text.count
         canUndo = true
@@ -324,7 +412,7 @@ final class KeyboardViewModel {
 
         let preview = text.trimmingCharacters(in: .whitespacesAndNewlines)
         phase = .inserted(preview: preview, latencyMs: latencyMs)
-        scheduleIdleReset(after: 2.8)
+        scheduleIdleReset(after: 2.5)
     }
 
     private func scheduleIdleReset(after seconds: Double) {
@@ -373,7 +461,6 @@ final class KeyboardViewModel {
             if let active {
                 Task { await active.cancel() }
             }
-            self.isHoldingToTalk = false
             HapticFeedback.error()
             switch err {
             case .permissionDenied:
@@ -391,16 +478,15 @@ final class KeyboardViewModel {
     }
 
     private func pushAudioLevel(_ level: CGFloat) {
-        let clamped = max(0.06, min(1.0, level))
-        // Shift outward from center for a lush, centered symmetric pulse
+        let clamped = max(0.08, min(1.0, level))
         var next = rawLevelHistory
         let mid = next.count / 2
         if mid > 1 {
             for i in stride(from: 0, to: mid - 1, by: 1) {
-                next[i] = next[i + 1] * 0.94
+                next[i] = next[i + 1] * 0.92
             }
             for i in stride(from: next.count - 1, through: mid + 1, by: -1) {
-                next[i] = next[i - 1] * 0.94
+                next[i] = next[i - 1] * 0.92
             }
         }
         let jitter = CGFloat.random(in: 0.88...1.12)

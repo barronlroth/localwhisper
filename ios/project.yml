@@ -40,6 +40,7 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_EMIT_LOC_STRINGS: YES
+        PROVISIONING_PROFILE_SPECIFIER: $(APP_PROVISIONING_PROFILE)
     dependencies:
       - target: LocalWhisperKeyboard
         embed: true
@@ -62,6 +63,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
+        PROVISIONING_PROFILE_SPECIFIER: $(KB_PROVISIONING_PROFILE)
 
 schemes:
   LocalWhisper:
