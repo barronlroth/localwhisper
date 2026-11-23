@@ -41,6 +41,16 @@ public struct TranscriptionResponse: Codable, Sendable {
     }
 }
 
+public struct DictionarySyncResponse: Codable, Sendable {
+    public let entries: [DictionaryEntry]
+    public let updatedAt: Double
+
+    enum CodingKeys: String, CodingKey {
+        case entries
+        case updatedAt = "updated_at"
+    }
+}
+
 public enum ParakeetError: LocalizedError, Sendable {
     case invalidURL
     case emptyAudio
@@ -203,6 +213,101 @@ public final class ParakeetClient: Sendable {
             throw ParakeetError.decodingFailed
         }
         return result
+    }
+
+    // MARK: - Mac-Hosted Personal Dictionary Sync
+
+    public func fetchDictionary(serverURL: String, apiToken: String = "") async throws -> DictionarySyncResponse {
+        guard let base = Self.normalizedBaseURL(serverURL) else {
+            throw ParakeetError.invalidURL
+        }
+        var req = URLRequest(url: base.appendingPathComponent("v1/dictionary"))
+        req.httpMethod = "GET"
+        req.timeoutInterval = 8
+        if !apiToken.isEmpty {
+            req.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
+        }
+        return try await performDictionaryRequest(req)
+    }
+
+    public func replaceDictionary(
+        _ entries: [DictionaryEntry],
+        serverURL: String,
+        apiToken: String = ""
+    ) async throws -> DictionarySyncResponse {
+        guard let base = Self.normalizedBaseURL(serverURL) else {
+            throw ParakeetError.invalidURL
+        }
+        var req = URLRequest(url: base.appendingPathComponent("v1/dictionary"))
+        req.httpMethod = "PUT"
+        req.timeoutInterval = 8
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !apiToken.isEmpty {
+            req.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
+        }
+        struct Payload: Encodable { let entries: [DictionaryEntry] }
+        req.httpBody = try JSONEncoder().encode(Payload(entries: entries))
+        return try await performDictionaryRequest(req)
+    }
+
+    public func upsertDictionaryEntry(
+        _ entry: DictionaryEntry,
+        serverURL: String,
+        apiToken: String = ""
+    ) async throws -> DictionarySyncResponse {
+        guard let base = Self.normalizedBaseURL(serverURL) else {
+            throw ParakeetError.invalidURL
+        }
+        var req = URLRequest(url: base.appendingPathComponent("v1/dictionary"))
+        req.httpMethod = "POST"
+        req.timeoutInterval = 8
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !apiToken.isEmpty {
+            req.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
+        }
+        req.httpBody = try JSONEncoder().encode(entry)
+        return try await performDictionaryRequest(req)
+    }
+
+    public func deleteDictionaryEntry(
+        id: String,
+        serverURL: String,
+        apiToken: String = ""
+    ) async throws -> DictionarySyncResponse {
+        guard let base = Self.normalizedBaseURL(serverURL) else {
+            throw ParakeetError.invalidURL
+        }
+        var req = URLRequest(url: base.appendingPathComponent("v1/dictionary").appendingPathComponent(id))
+        req.httpMethod = "DELETE"
+        req.timeoutInterval = 8
+        if !apiToken.isEmpty {
+            req.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
+        }
+        return try await performDictionaryRequest(req)
+    }
+
+    private func performDictionaryRequest(_ req: URLRequest) async throws -> DictionarySyncResponse {
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: req)
+        } catch {
+            throw ParakeetError.serverUnreachable(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw ParakeetError.decodingFailed
+        }
+        if http.statusCode == 401 || http.statusCode == 403 {
+            throw ParakeetError.unauthorized
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let msg = String(data: data, encoding: .utf8) ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode)
+            throw ParakeetError.httpError(http.statusCode, msg)
+        }
+        guard let decoded = try? JSONDecoder().decode(DictionarySyncResponse.self, from: data) else {
+            throw ParakeetError.decodingFailed
+        }
+        return decoded
     }
 }
 

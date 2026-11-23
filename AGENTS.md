@@ -11,7 +11,7 @@ LocalWhisper has two components:
 1. **Mac Transcription Server (`server/`)**
    - FastAPI + `parakeet-mlx` (`mlx-community/parakeet-tdt-0.6b-v3` by default), managed with `uv` on Python 3.14.
    - Binds strictly to `127.0.0.1:43120` and is exposed **tailnet-only** over HTTPS via `tailscale serve --bg --set-path /parakeet http://127.0.0.1:43120`.
-   - Exposes `GET /health`, `POST /v1/transcribe` (WAV/PCM fast path without spawning `ffmpeg`, plus `ffmpeg` fallback for other formats), and `WS /v1/stream` (streams 16 kHz Int16 PCM while speaking for minimal post-stop latency).
+   - Exposes `GET /health`, `POST /v1/transcribe` (WAV/PCM fast path without spawning `ffmpeg`, plus `ffmpeg` fallback for other formats), `WS /v1/stream` (streams 16 kHz Int16 PCM while speaking for minimal post-stop latency), and `GET/PUT/POST/DELETE /v1/dictionary` (canonical JSON personal dictionary hosted at `~/Library/Application Support/LocalWhisper/dictionary.json` with mtime hot-reload, shared across iPhone/iPad clients).
    - Runs a periodic idle keep-warm pass (`PARAKEET_KEEPWARM_SECONDS=180`) so macOS does not page Parakeet’s weights out to swap overnight.
    - Deterministic post-processing (`server/postprocess.py`): filler-word removal, stutter collapse, personal dictionary replacements, spoken line breaks/notes bullets, and cursor-context capitalization & spacing.
 

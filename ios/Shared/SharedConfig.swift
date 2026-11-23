@@ -80,13 +80,13 @@ public enum TranscriptionMode: String, Codable, CaseIterable, Identifiable, Send
 }
 
 public struct DictionaryEntry: Codable, Identifiable, Equatable, Hashable, Sendable {
-    public var id: UUID
+    public var id: String
     public var spoken: String
     public var replacement: String
     public var caseSensitive: Bool
 
     public init(
-        id: UUID = UUID(),
+        id: String = UUID().uuidString.lowercased(),
         spoken: String,
         replacement: String,
         caseSensitive: Bool = false
@@ -156,6 +156,8 @@ public final class SharedStore {
         static let pendingHandoffText = "pf.pendingHandoffText"
         static let pendingHandoffTimestamp = "pf.pendingHandoffTimestamp"
         static let lastDiagnostic = "pf.lastDiagnostic"
+        static let dictionaryHasUnsyncedChanges = "pf.dictionaryHasUnsyncedChanges"
+        static let dictionaryLastSyncedAt = "pf.dictionaryLastSyncedAt"
     }
 
     private let defaults: UserDefaults
@@ -205,6 +207,20 @@ public final class SharedStore {
         didSet { defaults.set(lastDiagnostic, forKey: Keys.lastDiagnostic) }
     }
 
+    public var dictionaryHasUnsyncedChanges: Bool {
+        didSet { defaults.set(dictionaryHasUnsyncedChanges, forKey: Keys.dictionaryHasUnsyncedChanges) }
+    }
+
+    public var dictionaryLastSyncedAt: Date? {
+        didSet {
+            if let date = dictionaryLastSyncedAt {
+                defaults.set(date.timeIntervalSince1970, forKey: Keys.dictionaryLastSyncedAt)
+            } else {
+                defaults.removeObject(forKey: Keys.dictionaryLastSyncedAt)
+            }
+        }
+    }
+
     private init() {
         if let suite = UserDefaults(suiteName: AppGroup.identifier) {
             self.defaults = suite
@@ -223,6 +239,9 @@ public final class SharedStore {
         self.prewarmWebView = defaults.object(forKey: Keys.prewarmWebView) as? Bool ?? true
         self.autoTrailingSpace = defaults.object(forKey: Keys.autoTrailingSpace) as? Bool ?? false
         self.lastDiagnostic = defaults.string(forKey: Keys.lastDiagnostic) ?? ""
+        self.dictionaryHasUnsyncedChanges = defaults.object(forKey: Keys.dictionaryHasUnsyncedChanges) as? Bool ?? false
+        let syncedTS = defaults.double(forKey: Keys.dictionaryLastSyncedAt)
+        self.dictionaryLastSyncedAt = syncedTS > 0 ? Date(timeIntervalSince1970: syncedTS) : nil
 
         let loadedDict: [DictionaryEntry] = Self.loadCodable(from: defaults, forKey: Keys.dictionary) ?? []
         let seededDefaults: [DictionaryEntry]?
@@ -259,6 +278,9 @@ public final class SharedStore {
         prewarmWebView = defaults.object(forKey: Keys.prewarmWebView) as? Bool ?? true
         autoTrailingSpace = defaults.object(forKey: Keys.autoTrailingSpace) as? Bool ?? false
         lastDiagnostic = defaults.string(forKey: Keys.lastDiagnostic) ?? ""
+        dictionaryHasUnsyncedChanges = defaults.object(forKey: Keys.dictionaryHasUnsyncedChanges) as? Bool ?? false
+        let syncedTS = defaults.double(forKey: Keys.dictionaryLastSyncedAt)
+        dictionaryLastSyncedAt = syncedTS > 0 ? Date(timeIntervalSince1970: syncedTS) : nil
         if let loadedDict: [DictionaryEntry] = Self.loadCodable(from: defaults, forKey: Keys.dictionary) {
             dictionary = loadedDict
         }

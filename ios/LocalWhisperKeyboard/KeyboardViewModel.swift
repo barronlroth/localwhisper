@@ -159,11 +159,12 @@ final class KeyboardViewModel {
         HapticFeedback.startListening()
 
         let context = onContextBeforeCursor?().map { String($0.suffix(80)) }
+        let localOverrides = SharedStore.shared.dictionaryHasUnsyncedChanges ? SharedStore.shared.dictionary : []
         let session = ParakeetStreamSession(
             serverURL: SharedStore.shared.serverURL,
             apiToken: SharedStore.shared.apiToken,
             mode: mode,
-            dictionary: SharedStore.shared.dictionary,
+            dictionary: localOverrides,
             context: context,
             smartSpacing: SharedStore.shared.smartSpacing,
             enableWebSocket: SharedStore.shared.useStreamingWebSocket
@@ -199,7 +200,7 @@ final class KeyboardViewModel {
         let currentMode = mode
         let storeSnapshotURL = SharedStore.shared.serverURL
         let storeSnapshotToken = SharedStore.shared.apiToken
-        let storeSnapshotDict = SharedStore.shared.dictionary
+        let storeSnapshotDict = SharedStore.shared.dictionaryHasUnsyncedChanges ? SharedStore.shared.dictionary : []
         let storeSnapshotSpacing = SharedStore.shared.smartSpacing
         let context = onContextBeforeCursor?().map { String($0.suffix(80)) }
 

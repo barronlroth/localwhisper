@@ -8,7 +8,7 @@ A private, self-hosted, Wispr Flow–style iOS dictation keyboard backed by **NV
 
 - **No app-switching in the keyboard** — records directly inside the custom iOS keyboard extension using the invisible `WKWebView` + `getUserMedia` workaround (with a 1s heartbeat / ~3s dead-man's switch so the microphone always shuts off cleanly if iOS suspends the extension).
 - **Sub-250ms local transcription on Apple Silicon** — preloads and keeps `parakeet-tdt-0.6b-v3` warm in unified RAM on your Mac (periodic idle keep-warm prevents overnight macOS swap-out), streams 16 kHz PCM over WebSocket while you talk, and decodes WAV/PCM directly without spawning `ffmpeg`.
-- **Wispr Flow–style UX & cleanup** — hybrid tap-to-toggle and press-and-hold dictation, live 24-bar waveform, filler-word removal (`um`, `uh`, stutters), cursor-context capitalization & spacing, personal dictionary replacements, searchable history, and 1-tap Undo.
+- **Wispr Flow–style UX & cleanup** — Numbers & Symbols primary keyboard (`123`, `#+=`, `ABC`), live top-bar waveform, typing styles (`Clean`, `Casual`, `very casual`, `Notes`, `Raw`), filler-word removal, cursor-context capitalization & spacing, Mac-hosted personal dictionary synced across all your devices (iPhone/iPad), searchable history, and 1-tap Undo.
 - **Private by default** — server binds to `127.0.0.1` and is exposed strictly to your Tailnet over HTTPS via `tailscale serve` (optional Bearer token supported).
 
 ## Architecture
@@ -62,6 +62,7 @@ You can customize the server via environment variables (or in `~/Library/LaunchA
 - `PARAKEET_PORT` — local loopback port (default: `43120`)
 - `PARAKEET_API_KEY` — optional Bearer token for `Authorization: Bearer ...`
 - `PARAKEET_KEEPWARM_SECONDS` — idle keep-warm interval in seconds (default: `180`; `0` disables)
+- `PARAKEET_DICTIONARY_PATH` — path to the shared JSON dictionary (default: `~/Library/Application Support/LocalWhisper/dictionary.json`; auto-reloads if edited directly on disk)
 - `PARAKEET_DEBUG_TEXT` — set to `1` to log transcript contents (off by default)
 
 ## 2. Build & Install the iOS App + Keyboard

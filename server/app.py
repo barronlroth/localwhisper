@@ -14,6 +14,7 @@ from typing import Any
 import mlx.core as mx
 import numpy as np
 from fastapi import (
+    Body,
     Depends,
     FastAPI,
     File,
@@ -42,6 +43,7 @@ from audio_decode import (
     is_effectively_silent,
     pcm_s16le_to_float32,
 )
+from dictionary_store import DictionaryStore
 from postprocess import DictionaryEntry, clean_transcript
 
 logging.basicConfig(
@@ -168,6 +170,7 @@ class ParakeetEngine:
 
 
 engine = ParakeetEngine(MODEL_ID)
+dictionary_store = DictionaryStore()
 
 
 def _parse_dictionary(raw: str | list[dict[str, Any]] | None) -> list[DictionaryEntry]:
@@ -253,6 +256,32 @@ async def health() -> dict[str, Any]:
     }
 
 
+@app.get("/v1/dictionary", dependencies=[Depends(_verify_auth)])
+async def get_dictionary() -> dict[str, Any]:
+    return dictionary_store.snapshot()
+
+
+@app.put("/v1/dictionary", dependencies=[Depends(_verify_auth)])
+async def put_dictionary(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail="Expected JSON object with 'entries' list")
+    return dictionary_store.replace_all(entries)
+
+
+@app.post("/v1/dictionary", dependencies=[Depends(_verify_auth)])
+async def upsert_dictionary_entry(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    try:
+        return dictionary_store.upsert(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/v1/dictionary/{entry_id}", dependencies=[Depends(_verify_auth)])
+async def delete_dictionary_entry(entry_id: str) -> dict[str, Any]:
+    return dictionary_store.delete(entry_id)
+
+
 @app.post("/v1/transcribe", dependencies=[Depends(_verify_auth)])
 async def transcribe_endpoint(
     request: Request,
@@ -308,7 +337,7 @@ async def transcribe_endpoint(
         )
 
     raw_text, inference_ms = await engine.transcribe(samples)
-    dict_entries = _parse_dictionary(dictionary)
+    dict_entries = dictionary_store.merged_for_postprocess(_parse_dictionary(dictionary))
     cleaned = clean_transcript(
         raw_text,
         mode=mode,
@@ -425,10 +454,11 @@ async def stream_endpoint(ws: WebSocket) -> None:
 
                 duration_seconds = len(samples) / float(TARGET_SAMPLE_RATE)
                 raw_text, inference_ms = await engine.transcribe(samples)
+                merged_dict = dictionary_store.merged_for_postprocess(dictionary)
                 cleaned = clean_transcript(
                     raw_text,
                     mode=mode,
-                    dictionary=dictionary,
+                    dictionary=merged_dict,
                     context_before=context,
                     smart_spacing=smart_spacing,
                 )

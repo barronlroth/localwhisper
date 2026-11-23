@@ -126,3 +126,45 @@ def test_casual_keeps_normal_casing_and_drops_trailing_period() -> None:
     assert cleaned == "Yeah, I'm on my way right now"
     assert clean_transcript("Are you free tonight?", mode="casual") == "Are you free tonight?"
 
+
+def test_dictionary_store_crud_and_hot_reload(tmp_path) -> None:
+    import json
+    from dictionary_store import DictionaryStore
+
+    dict_file = tmp_path / "dictionary.json"
+    store = DictionaryStore(path=dict_file)
+
+    # First run seeds default entries and persists them to disk
+    snap = store.snapshot()
+    assert dict_file.exists()
+    assert any(e["replacement"] == "Tailscale" for e in snap["entries"])
+
+    # Upsert a new entry without clobbering existing ones
+    snap = store.upsert({"id": "custom-1", "spoken": "super whisper", "replacement": "Superwhisper", "case_sensitive": False})
+    assert any(e["id"] == "custom-1" and e["replacement"] == "Superwhisper" for e in snap["entries"])
+
+    # Delete that entry
+    snap = store.delete("custom-1")
+    assert all(e["id"] != "custom-1" for e in snap["entries"])
+
+    # Replace all with a single custom entry and verify merge precedence over client entries
+    store.replace_all([{"id": "srv-1", "spoken": "local whisper", "replacement": "LocalWhisper", "case_sensitive": True}])
+    merged = store.merged_for_postprocess([
+        DictionaryEntry(spoken="local whisper", replacement="WrongName", case_sensitive=True),
+        DictionaryEntry(spoken="ipad", replacement="iPad", case_sensitive=False),
+    ])
+    by_spoken = {e.spoken.lower(): e.replacement for e in merged}
+    assert by_spoken["local whisper"] == "LocalWhisper"
+    assert by_spoken["ipad"] == "iPad"
+
+    # Manual disk edit hot-reloads without restarting server
+    raw = json.loads(dict_file.read_text(encoding="utf-8"))
+    raw["entries"].append({"id": "disk-1", "spoken": "xcode gen", "replacement": "XcodeGen", "case_sensitive": False})
+    dict_file.write_text(json.dumps(raw), encoding="utf-8")
+    # Bump mtime forward to guarantee stat change even on coarse filesystems
+    import os
+    st = dict_file.stat()
+    os.utime(dict_file, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+    assert any(e["replacement"] == "XcodeGen" for e in store.snapshot()["entries"])
+
+
