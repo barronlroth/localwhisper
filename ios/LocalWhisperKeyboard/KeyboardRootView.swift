@@ -135,7 +135,7 @@ struct KeyboardRootView: View {
                 .disabled(!viewModel.canUndo)
                 .accessibilityLabel("Undo last dictation")
 
-                // Style picker pill ("Clean" / "Raw" / "Notes")
+                // Style picker pill ("Clean" / "Casual" / "very casual" / "Notes" / "Raw")
                 Button {
                     viewModel.cycleMode()
                 } label: {
@@ -146,6 +146,8 @@ struct KeyboardRootView: View {
                         Text(viewModel.mode.title)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(primaryInk)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                     .padding(.horizontal, 16)
                     .frame(height: 40)

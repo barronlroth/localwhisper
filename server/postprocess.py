@@ -119,11 +119,19 @@ def _format_notes(text: str) -> str:
     return out
 
 
+def _strip_trailing_period(text: str) -> str:
+    """Drop a single trailing period at the end of a message, keeping '...', '?', '!'."""
+    if text.endswith(".") and not text.endswith(".."):
+        return text[:-1]
+    return text
+
+
 def _apply_context_awareness(
     text: str,
     context_before: str | None,
     protected_words: set[str],
     smart_spacing: bool = True,
+    preserve_lowercase: bool = False,
 ) -> str:
     if not text or not context_before:
         return text
@@ -141,7 +149,7 @@ def _apply_context_awareness(
     out = text
 
     # If mid-sentence, lowercase a standard sentence-initial word unless it's protected/acronym/I
-    if is_mid_sentence and out:
+    if is_mid_sentence and out and not preserve_lowercase:
         m = re.match(r"^([A-Za-z']+)(.*)", out, flags=re.DOTALL)
         if m:
             first_word, rest = m.group(1), m.group(2)
@@ -172,13 +180,22 @@ def clean_transcript(
     context_before: str | None = None,
     smart_spacing: bool = True,
 ) -> str:
-    """Clean and format a raw Parakeet transcription for direct insertion into iOS text fields."""
+    """Clean and format a raw Parakeet transcription for direct insertion into iOS text fields.
+
+    Supported modes:
+    - ``clean``: full punctuation & capitalization, filler/stutter cleanup, dictionary.
+    - ``casual``: natural capitalization & commas, drops trailing period.
+    - ``very_casual``: all lowercase (keeps natural commas), drops trailing period.
+    - ``notes``: spoken bullet list formatting.
+    - ``raw``: verbatim Parakeet output.
+    """
     text = (raw_text or "").strip()
     if not text:
         return ""
 
-    normalized_mode = (mode or "clean").lower().strip()
+    normalized_mode = (mode or "clean").lower().strip().replace(" ", "_").replace("-", "_")
     protected_words: set[str] = set()
+    dict_list = list(dictionary) if dictionary else []
 
     if normalized_mode != "raw":
         text = _NEW_PARAGRAPH_RE.sub("\n\n", text)
@@ -190,8 +207,22 @@ def clean_transcript(
         # Re-capitalize sentence starts after filler removal
         text = _SENTENCE_START_RE.sub(lambda m: m.group(1) + m.group(2).upper(), text)
 
-    if dictionary:
-        text, protected_words = _apply_dictionary(text, dictionary)
+    if normalized_mode == "very_casual":
+        # Apply case-insensitive dictionary replacements first so spelling is corrected,
+        # then lowercase everything, then re-apply explicitly case-sensitive entries.
+        ci_entries = [e for e in dict_list if not e.case_sensitive]
+        cs_entries = [e for e in dict_list if e.case_sensitive]
+        if ci_entries:
+            text, _ = _apply_dictionary(text, ci_entries)
+        text = text.lower()
+        if cs_entries:
+            text, protected_words = _apply_dictionary(text, cs_entries)
+        text = _strip_trailing_period(text)
+    else:
+        if dict_list:
+            text, protected_words = _apply_dictionary(text, dict_list)
+        if normalized_mode == "casual":
+            text = _strip_trailing_period(text)
 
     text = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", text)
     text = _MULTI_SPACE_RE.sub(" ", text)
@@ -204,6 +235,7 @@ def clean_transcript(
             context_before=context_before,
             protected_words=protected_words,
             smart_spacing=smart_spacing,
+            preserve_lowercase=(normalized_mode == "very_casual"),
         )
 
     return text

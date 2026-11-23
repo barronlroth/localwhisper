@@ -61,8 +61,11 @@ cat > "$PLIST_DST" << EOF
 </plist>
 EOF
 
-# Unload existing LaunchAgent cleanly
-launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+# Reload LaunchAgent cleanly (wait briefly after bootout so launchd finishes unloading)
+if launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
+  launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+  sleep 1
+fi
 launchctl bootstrap "gui/$(id -u)" "$PLIST_DST"
 
 echo "==> Waiting for local server on http://127.0.0.1:${PORT}/health ..."

@@ -18,7 +18,7 @@ LocalWhisper has two components:
 2. **iOS Companion App + Custom Keyboard Extension (`ios/`)**
    - Generated via **XcodeGen** from `ios/project.yml` → `ios/LocalWhisper.xcodeproj` (the `.xcodeproj` is gitignored and regenerated on build).
    - **`ios/Shared/`** (compiled into *both* targets): App Group settings/history/dictionary store (`SharedConfig.swift`), 16 kHz WAV encoder (`AudioWAVEncoder.swift`), WebSocket + HTTP client (`ParakeetClient.swift`), invisible `WKWebView` mic capture engine (`WebViewAudioRecorder.swift`), waveform UI (`WaveformView.swift`), haptics (`HapticFeedback.swift`), and `PrivacyInfo.xcprivacy`.
-   - **`ios/LocalWhisperKeyboard/`**: Wispr Flow–style custom keyboard extension — Numbers & Symbols (`123`) primary layout, `#+=` secondary symbols, `ABC` QWERTY letters, top-left Settings link (`localwhisper://settings`), Undo button, Style picker (`Clean` / `Raw` / `Notes`), and top-right Record toggle with live top-bar waveform.
+   - **`ios/LocalWhisperKeyboard/`**: Wispr Flow–style custom keyboard extension — Numbers & Symbols (`123`) primary layout, `#+=` secondary symbols, `ABC` QWERTY letters, top-left Settings link (`localwhisper://settings`), Undo button, Style picker (`Clean` / `Casual` / `very casual` / `Notes` / `Raw`), and top-right Record toggle with live top-bar waveform.
    - **`ios/LocalWhisper/`**: Companion SwiftUI app (Setup Checklist, Dictation Playground with both WebView Hack and Native `AVAudioEngine` testers, searchable History, Personal Dictionary, Settings, and `localwhisper://dictate` fallback recorder).
 
 ---

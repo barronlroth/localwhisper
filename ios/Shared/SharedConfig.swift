@@ -31,40 +31,50 @@ public enum AppGroup {
 
 public enum TranscriptionMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case clean
-    case raw
+    case casual
+    case veryCasual = "very_casual"
     case notes
+    case raw
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
         case .clean: return "Clean"
-        case .raw: return "Raw"
+        case .casual: return "Casual"
+        case .veryCasual: return "very casual"
         case .notes: return "Notes"
+        case .raw: return "Raw"
         }
     }
 
     public var subtitle: String {
         switch self {
-        case .clean: return "Removes filler words, fixes stutters & context spacing"
-        case .raw: return "Exact verbatim output from Parakeet"
+        case .clean: return "Standard punctuation & casing, removes filler words"
+        case .casual: return "Natural casing & commas, drops trailing period"
+        case .veryCasual: return "All lowercase, keeps natural commas, no trailing period"
         case .notes: return "Turns spoken bullets into crisp lists"
+        case .raw: return "Exact verbatim output from Parakeet"
         }
     }
 
     public var symbolName: String {
         switch self {
         case .clean: return "sparkles"
-        case .raw: return "waveform"
+        case .casual: return "bubble.left"
+        case .veryCasual: return "textformat.abc"
         case .notes: return "list.bullet"
+        case .raw: return "waveform"
         }
     }
 
     public var next: TranscriptionMode {
         switch self {
-        case .clean: return .raw
-        case .raw: return .notes
-        case .notes: return .clean
+        case .clean: return .casual
+        case .casual: return .veryCasual
+        case .veryCasual: return .notes
+        case .notes: return .raw
+        case .raw: return .clean
         }
     }
 }

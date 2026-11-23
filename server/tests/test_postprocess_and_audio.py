@@ -90,3 +90,39 @@ def test_spoken_line_breaks_and_notes_mode() -> None:
         mode="notes",
     )
     assert cleaned == "- Buy milk\n- Call mom"
+
+
+def test_very_casual_keeps_commas_lowercases_and_drops_trailing_period() -> None:
+    entries = [
+        DictionaryEntry(spoken="whisper flow", replacement="Wispr Flow"),
+        DictionaryEntry(spoken="nyc", replacement="NYC", case_sensitive=True),
+    ]
+    cleaned = clean_transcript(
+        "Um, yeah, I'm on my way right now.",
+        mode="very_casual",
+        dictionary=entries,
+    )
+    assert cleaned == "yeah, i'm on my way right now"
+
+    # Keeps question marks, exclamation points, and ellipsis
+    assert clean_transcript("Wait, are you coming?", mode="very_casual") == "wait, are you coming?"
+    assert clean_transcript("Let's go!", mode="very_casual") == "let's go!"
+    assert clean_transcript("Hmm, maybe...", mode="very_casual") == "maybe..."
+
+    # Applies spelling fix in lowercase for normal dictionary entries, preserves case_sensitive entries
+    assert (
+        clean_transcript("Testing whisper flow in nyc.", mode="very_casual", dictionary=entries)
+        == "testing wispr flow in NYC"
+    )
+
+
+def test_very_casual_preserves_case_sensitive_dictionary_entry() -> None:
+    entries = [DictionaryEntry(spoken="nyc", replacement="NYC", case_sensitive=True)]
+    assert clean_transcript("Headed to nyc.", mode="very_casual", dictionary=entries) == "headed to NYC"
+
+
+def test_casual_keeps_normal_casing_and_drops_trailing_period() -> None:
+    cleaned = clean_transcript("Um, yeah, I'm on my way right now.", mode="casual")
+    assert cleaned == "Yeah, I'm on my way right now"
+    assert clean_transcript("Are you free tonight?", mode="casual") == "Are you free tonight?"
+
