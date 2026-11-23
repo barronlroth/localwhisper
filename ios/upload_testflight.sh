@@ -43,6 +43,23 @@ APP_PROFILE_NAME="${APP_STORE_PROFILE_NAME:-LocalWhisper AppStore}"
 KB_PROFILE_NAME="${KB_STORE_PROFILE_NAME:-LocalWhisper Keyboard AppStore}"
 BUILD_NUMBER="${1:-$(date +%Y%m%d%H%M)}"
 
+SIGN_KC="${DISTRIBUTION_KEYCHAIN:-$HOME/.appstoreconnect/signing/distribution.keychain-db}"
+SIGN_KC_PASS_FILE="${DISTRIBUTION_KEYCHAIN_PASS_FILE:-$HOME/.appstoreconnect/signing/.kc_pass}"
+EXTRA_SIGN_FLAGS=()
+ORIG_KEYCHAINS=()
+
+if [[ -f "$SIGN_KC" && -f "$SIGN_KC_PASS_FILE" ]]; then
+  security unlock-keychain -p "$(cat "$SIGN_KC_PASS_FILE")" "$SIGN_KC"
+  while IFS= read -r kc; do
+    kc="${kc//\"/}"
+    kc="${kc#"${kc%%[![:space:]]*}"}"
+    [[ -n "$kc" ]] && ORIG_KEYCHAINS+=("$kc")
+  done < <(security list-keychains -d user)
+  security list-keychains -d user -s "$SIGN_KC" "${ORIG_KEYCHAINS[@]}"
+  trap 'if [[ ${#ORIG_KEYCHAINS[@]} -gt 0 ]]; then security list-keychains -d user -s "${ORIG_KEYCHAINS[@]}"; fi' EXIT
+  EXTRA_SIGN_FLAGS+=(OTHER_CODE_SIGN_FLAGS="--keychain $SIGN_KC")
+fi
+
 echo "==> Regenerating LocalWhisper.xcodeproj..."
 xcodegen generate
 
@@ -89,6 +106,7 @@ xcodebuild \
   CODE_SIGN_IDENTITY="Apple Distribution" \
   APP_PROVISIONING_PROFILE="$APP_PROFILE_NAME" \
   KB_PROVISIONING_PROFILE="$KB_PROFILE_NAME" \
+  "${EXTRA_SIGN_FLAGS[@]}" \
   archive
 
 echo "==> Exporting signed App Store IPA..."
